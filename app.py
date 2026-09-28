@@ -53,7 +53,7 @@ def set_background(image_path):
         unsafe_allow_html=True,
     )
 
-set_background("background_RAG.jpg")
+set_background("background_RAG.avif")
 
 settings = get_settings()
 
