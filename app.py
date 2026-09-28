@@ -54,6 +54,49 @@ def set_background(image_path):
     )
 
 set_background("background_RAG.avif")
+st.markdown(
+    """
+    <style>
+
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background: rgba(8, 15, 35, 0.92);
+        backdrop-filter: blur(14px);
+        border-right: 1px solid rgba(255, 255, 255, 0.10);
+    }
+
+    /* Sidebar title */
+    [data-testid="stSidebar"] h1 {
+        color: white;
+        font-size: 24px;
+        font-weight: 700;
+    }
+
+    /* Navigation labels */
+    [data-testid="stSidebar"] label {
+        color: #dbe4ff !important;
+        font-weight: 500;
+    }
+
+    /* Radio buttons */
+    [data-testid="stSidebar"] [role="radiogroup"] {
+        gap: 8px;
+    }
+
+    [data-testid="stSidebar"] [role="radio"] {
+        padding: 10px 12px;
+        border-radius: 10px;
+        transition: 0.2s ease;
+    }
+
+    [data-testid="stSidebar"] [role="radio"]:hover {
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 settings = get_settings()
 
