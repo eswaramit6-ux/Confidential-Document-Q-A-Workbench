@@ -209,15 +209,40 @@ def render_ask():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
+    # Document selection for summary/comparison requests from chat.
+    # Q&A still searches all documents when nothing is selected.
+    doc_options = {
+        f"{d['filename']} ({d['sha256'][:8]})": d["sha256"]
+        for d in docs
+    }
+
+    selected_labels = st.multiselect(
+        "Select document(s) for summary or comparison",
+        options=list(doc_options.keys()),
+        help=(
+            "Select one document when asking for a summary. "
+            "Select two documents when asking to compare them. "
+            "Leave empty for normal Q&A across all indexed documents."
+        ),
+    )
+
+    selected_documents = [doc_options[label] for label in selected_labels]
+
     for turn in st.session_state.chat_history:
         with st.chat_message(turn["role"]):
             st.markdown(turn["content"])
             if turn.get("meta"):
                 _render_explainability(turn["meta"])
 
-    user_query = st.chat_input("Ask a question, request a summary, or ask to compare documents...")
+    user_query = st.chat_input(
+        "Ask a question, request a summary, or ask to compare documents..."
+    )
+
     if user_query:
-        st.session_state.chat_history.append({"role": "user", "content": user_query})
+        st.session_state.chat_history.append(
+            {"role": "user", "content": user_query}
+        )
+
         with st.chat_message("user"):
             st.markdown(user_query)
 
@@ -229,6 +254,7 @@ def render_ask():
                         model=settings.gemini_model,
                         temperature=settings.temperature,
                         top_k=settings.top_k,
+                        selected_documents=selected_documents,
                     )
                 except Exception as exc:  # noqa: BLE001
                     st.error(f"The workflow encountered an unexpected error: {exc}")
@@ -237,6 +263,7 @@ def render_ask():
 
             if final_state:
                 st.markdown(final_state.get("final_response", ""))
+
                 meta = {
                     "selected_agent": final_state.get("selected_agent"),
                     "routing_reason": final_state.get("routing_reason"),
@@ -247,10 +274,17 @@ def render_ask():
                     "errors": final_state.get("errors", []),
                     "execution_trace": final_state.get("execution_trace", []),
                 }
+
                 _render_explainability(meta)
+
                 st.session_state.chat_history.append(
-                    {"role": "assistant", "content": final_state.get("final_response", ""), "meta": meta}
+                    {
+                        "role": "assistant",
+                        "content": final_state.get("final_response", ""),
+                        "meta": meta,
+                    }
                 )
+
                 log_activity({
                     "query": user_query,
                     "agent": meta["selected_agent"],
