@@ -6,7 +6,6 @@ machine. LLM inference (routing, summarization, Q&A generation, comparison)
 is provided by the Google Gemini API and requires outbound network access
 and a configured GEMINI_API_KEY. This application is NOT fully offline.
 """
-import time
 
 import streamlit as st
 
@@ -14,7 +13,7 @@ from ingestion.indexer import index_file
 from models.embeddings import embedding_model_available
 from models.gemini_client import health_check as gemini_health_check
 from retrieval.vector_store import VectorStore, health_check as chroma_health_check
-from utils.config import DEFAULT_EMBEDDING_MODEL, SUPPORTED_EXTENSIONS, get_settings
+from utils.config import get_settings
 from utils.logger import get_logger
 from graph.workflow import run_workflow
 
@@ -28,9 +27,6 @@ st.set_page_config(
 
 settings = get_settings()
 
-if "agent_activity" not in st.session_state:
-    st.session_state.agent_activity = []
-
 
 @st.cache_resource(show_spinner=False)
 def _get_vector_store(embedding_model: str):
@@ -39,11 +35,6 @@ def _get_vector_store(embedding_model: str):
 
 def vector_store() -> VectorStore:
     return _get_vector_store(settings.embedding_model)
-
-
-def log_activity(entry: dict):
-    st.session_state.agent_activity.insert(0, entry)
-    st.session_state.agent_activity = st.session_state.agent_activity[:25]
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +49,6 @@ page = st.sidebar.radio(
         "Ask Documents",
         "Summarize",
         "Compare",
-        "Agent Activity",
         "Settings",
     ],
 )
@@ -84,7 +74,11 @@ def render_documents():
         vs = vector_store()
 
         if st.button("Index uploaded files", type="primary"):
-            progress = st.progress(0.0, text="Starting ingestion...")
+            progress = st.progress(
+                0.0,
+                text="Starting ingestion...",
+            )
+
             results = []
 
             for i, uf in enumerate(uploaded_files):
@@ -108,20 +102,27 @@ def render_documents():
 
                 except Exception as exc:  # noqa: BLE001
                     st.error(
-                        f"Unexpected error indexing '{uf.name}': {exc}"
+                        f"Unexpected error indexing "
+                        f"'{uf.name}': {exc}"
                     )
 
-            progress.progress(1.0, text="Done.")
+            progress.progress(
+                1.0,
+                text="Done.",
+            )
 
             for r in results:
                 if r.status == "indexed":
                     st.success(r.message)
+
                 elif r.status == "duplicate":
                     st.info(r.message)
+
                 else:
                     st.error(r.message)
 
     st.divider()
+
     st.subheader("Indexed Documents")
 
     vs = vector_store()
@@ -129,18 +130,26 @@ def render_documents():
 
     if not docs:
         st.info(
-            "No documents indexed yet. Upload a PDF or DOCX above."
+            "No documents indexed yet. "
+            "Upload a PDF or DOCX above."
         )
         return
 
     for doc in docs:
         with st.container(border=True):
-            c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
 
-            c1.markdown(f"**{doc['filename']}**")
+            c1, c2, c3, c4 = st.columns(
+                [3, 2, 1, 1]
+            )
+
+            c1.markdown(
+                f"**{doc['filename']}**"
+            )
+
             c2.caption(
                 f"SHA-256: {doc['sha256'][:16]}..."
             )
+
             c3.caption(
                 f"{doc['chunk_count']} chunks"
             )
@@ -166,8 +175,9 @@ def render_documents():
                 key=f"reindex_{doc['sha256']}",
             ):
                 st.info(
-                    "Re-index requires re-uploading the original file "
-                    "(raw bytes aren't retained in ChromaDB metadata)."
+                    "Re-index requires re-uploading the "
+                    "original file (raw bytes aren't retained "
+                    "in ChromaDB metadata)."
                 )
 
 
@@ -176,9 +186,10 @@ def render_documents():
 # ---------------------------------------------------------------------------
 def render_ask():
     st.title("Ask Documents")
+
     st.caption(
-        "Automatic agent routing via the LangGraph Orchestrator "
-        "(LLM-based intent classification)."
+        "Automatic agent routing via the LangGraph "
+        "Orchestrator (LLM-based intent classification)."
     )
 
     vs = vector_store()
@@ -186,18 +197,20 @@ def render_ask():
 
     if not docs:
         st.warning(
-            "No documents indexed yet. Go to the Documents page first."
+            "No documents indexed yet. "
+            "Go to the Documents page first."
         )
         return
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------------
     # Document selection
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------------
     doc_options = {
-        f"{d['filename']} ({d['sha256'][:8]})": d["sha256"]
+        f"{d['filename']} ({d['sha256'][:8]})":
+        d["sha256"]
         for d in docs
     }
 
@@ -216,24 +229,32 @@ def render_ask():
         for label in selected_labels
     ]
 
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------------
     # Chat history
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------------
     for turn in st.session_state.chat_history:
+
         with st.chat_message(turn["role"]):
-            st.markdown(turn["content"])
+
+            st.markdown(
+                turn["content"]
+            )
 
             if turn.get("meta"):
-                _render_explainability(turn["meta"])
+                _render_explainability(
+                    turn["meta"]
+                )
 
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------------
     # Chat input
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------------
     user_query = st.chat_input(
-        "Ask a question, request a summary, or ask to compare documents..."
+        "Ask a question, request a summary, "
+        "or ask to compare documents..."
     )
 
     if user_query:
+
         st.session_state.chat_history.append(
             {
                 "role": "user",
@@ -245,7 +266,11 @@ def render_ask():
             st.markdown(user_query)
 
         with st.chat_message("assistant"):
-            with st.spinner("Routing and processing..."):
+
+            with st.spinner(
+                "Routing and processing..."
+            ):
+
                 try:
                     final_state = run_workflow(
                         user_query=user_query,
@@ -256,8 +281,10 @@ def render_ask():
                     )
 
                 except Exception as exc:  # noqa: BLE001
+
                     st.error(
-                        f"The workflow encountered an unexpected error: {exc}"
+                        "The workflow encountered an "
+                        f"unexpected error: {exc}"
                     )
 
                     logger.error(
@@ -267,6 +294,7 @@ def render_ask():
                     final_state = None
 
             if final_state:
+
                 st.markdown(
                     final_state.get(
                         "final_response",
@@ -275,58 +303,64 @@ def render_ask():
                 )
 
                 meta = {
-                    "selected_agent": final_state.get(
-                        "selected_agent"
-                    ),
-                    "routing_reason": final_state.get(
-                        "routing_reason"
-                    ),
-                    "sources": final_state.get(
-                        "sources",
-                        [],
-                    ),
-                    "retrieved_context": final_state.get(
-                        "retrieved_context",
-                        [],
-                    ),
-                    "llm_model": final_state.get(
-                        "llm_model"
-                    ),
-                    "processing_time_seconds": final_state.get(
-                        "processing_time_seconds"
-                    ),
-                    "errors": final_state.get(
-                        "errors",
-                        [],
-                    ),
-                    "execution_trace": final_state.get(
-                        "execution_trace",
-                        [],
-                    ),
+                    "selected_agent":
+                        final_state.get(
+                            "selected_agent"
+                        ),
+
+                    "routing_reason":
+                        final_state.get(
+                            "routing_reason"
+                        ),
+
+                    "sources":
+                        final_state.get(
+                            "sources",
+                            [],
+                        ),
+
+                    "retrieved_context":
+                        final_state.get(
+                            "retrieved_context",
+                            [],
+                        ),
+
+                    "llm_model":
+                        final_state.get(
+                            "llm_model"
+                        ),
+
+                    "processing_time_seconds":
+                        final_state.get(
+                            "processing_time_seconds"
+                        ),
+
+                    "errors":
+                        final_state.get(
+                            "errors",
+                            [],
+                        ),
+
+                    "execution_trace":
+                        final_state.get(
+                            "execution_trace",
+                            [],
+                        ),
                 }
 
-                _render_explainability(meta)
+                _render_explainability(
+                    meta
+                )
 
                 st.session_state.chat_history.append(
                     {
                         "role": "assistant",
-                        "content": final_state.get(
-                            "final_response",
-                            "",
-                        ),
+                        "content":
+                            final_state.get(
+                                "final_response",
+                                "",
+                            ),
                         "meta": meta,
-                    }
-                )
-
-                log_activity(
-                    {
-                        "query": user_query,
-                        "agent": meta["selected_agent"],
-                        "reason": meta["routing_reason"],
-                        "time": meta[
-                            "processing_time_seconds"
-                        ],
-                        "errors": meta["errors"],
                     }
                 )
 
@@ -335,10 +369,12 @@ def render_ask():
 # Explainability
 # ---------------------------------------------------------------------------
 def _render_explainability(meta: dict):
+
     with st.expander(
         f"🧭 Selected Agent: "
         f"**{meta.get('selected_agent', 'n/a')}** — details"
     ):
+
         st.markdown(
             f"**Routing reason:** "
             f"{meta.get('routing_reason', 'n/a')}"
@@ -355,15 +391,24 @@ def _render_explainability(meta: dict):
         )
 
         if meta.get("execution_trace"):
-            st.markdown("**Execution trace:**")
+
+            st.markdown(
+                "**Execution trace:**"
+            )
 
             for step in meta["execution_trace"]:
-                st.markdown(f"- {step}")
+                st.markdown(
+                    f"- {step}"
+                )
 
         if meta.get("sources"):
-            st.markdown("**Sources:**")
+
+            st.markdown(
+                "**Sources:**"
+            )
 
             for s in meta["sources"]:
+
                 page = (
                     f" — Page {s['page_number']}"
                     if s.get("page_number")
@@ -375,12 +420,19 @@ def _render_explainability(meta: dict):
                 )
 
         if meta.get("retrieved_context"):
-            st.markdown("**Retrieved context:**")
+
+            st.markdown(
+                "**Retrieved context:**"
+            )
 
             for i, chunk in enumerate(
                 meta["retrieved_context"]
             ):
-                m = chunk.get("metadata", {})
+
+                m = chunk.get(
+                    "metadata",
+                    {},
+                )
 
                 page = (
                     f" — Page {m.get('page_number')}"
@@ -392,6 +444,7 @@ def _render_explainability(meta: dict):
                     f"Chunk {i + 1}: "
                     f"{m.get('filename')}{page}"
                 ):
+
                     st.text(
                         chunk.get(
                             "text",
@@ -400,6 +453,7 @@ def _render_explainability(meta: dict):
                     )
 
         if meta.get("errors"):
+
             for e in meta["errors"]:
                 st.error(e)
 
@@ -408,6 +462,7 @@ def _render_explainability(meta: dict):
 # Summarize
 # ---------------------------------------------------------------------------
 def render_summarize():
+
     st.title("Summarize")
 
     vs = vector_store()
@@ -415,12 +470,14 @@ def render_summarize():
 
     if not docs:
         st.warning(
-            "No documents indexed yet. Go to the Documents page first."
+            "No documents indexed yet. "
+            "Go to the Documents page first."
         )
         return
 
     doc_options = {
-        f"{d['filename']} ({d['sha256'][:8]})": d["sha256"]
+        f"{d['filename']} ({d['sha256'][:8]})":
+        d["sha256"]
         for d in docs
     }
 
@@ -439,29 +496,44 @@ def render_summarize():
         "Generate Summary",
         type="primary",
     ):
-        sha256 = doc_options[selected_label]
+
+        sha256 = doc_options[
+            selected_label
+        ]
 
         with st.spinner(
             "Summarizer Agent working..."
         ):
+
             try:
+
                 final_state = run_workflow(
                     user_query=(
                         f"Summarize this document "
                         f"({detail_level})."
                     ),
+
                     model=settings.gemini_model,
+
                     temperature=settings.temperature,
+
                     top_k=settings.top_k,
-                    selected_documents=[sha256],
+
+                    selected_documents=[
+                        sha256
+                    ],
+
                     mode_hint="summarizer",
+
                     detail_level=detail_level,
                 )
 
             except Exception as exc:  # noqa: BLE001
+
                 st.error(
                     f"Summarization failed: {exc}"
                 )
+
                 return
 
         result = (
@@ -475,10 +547,13 @@ def render_summarize():
         )
 
         if final_state.get("errors"):
+
             for e in final_state["errors"]:
                 st.error(e)
 
-        st.subheader("Summary")
+        st.subheader(
+            "Summary"
+        )
 
         st.markdown(
             result.get(
@@ -491,43 +566,70 @@ def render_summarize():
         )
 
         if result.get("key_points"):
-            st.subheader("Key Points")
+
+            st.subheader(
+                "Key Points"
+            )
 
             for kp in result["key_points"]:
-                st.markdown(f"- {kp}")
+                st.markdown(
+                    f"- {kp}"
+                )
 
         if result.get("findings"):
-            st.subheader("Important Findings")
+
+            st.subheader(
+                "Important Findings"
+            )
 
             for f in result["findings"]:
-                st.markdown(f"- {f}")
+                st.markdown(
+                    f"- {f}"
+                )
 
         if result.get("conclusion"):
-            st.subheader("Conclusion")
-            st.markdown(result["conclusion"])
+
+            st.subheader(
+                "Conclusion"
+            )
+
+            st.markdown(
+                result["conclusion"]
+            )
 
         _render_explainability(
             {
-                "selected_agent": final_state.get(
-                    "selected_agent"
-                ),
-                "routing_reason": final_state.get(
-                    "routing_reason"
-                ),
-                "sources": final_state.get(
-                    "sources",
-                    [],
-                ),
-                "llm_model": final_state.get(
-                    "llm_model"
-                ),
-                "processing_time_seconds": final_state.get(
-                    "processing_time_seconds"
-                ),
-                "execution_trace": final_state.get(
-                    "execution_trace",
-                    [],
-                ),
+                "selected_agent":
+                    final_state.get(
+                        "selected_agent"
+                    ),
+
+                "routing_reason":
+                    final_state.get(
+                        "routing_reason"
+                    ),
+
+                "sources":
+                    final_state.get(
+                        "sources",
+                        [],
+                    ),
+
+                "llm_model":
+                    final_state.get(
+                        "llm_model"
+                    ),
+
+                "processing_time_seconds":
+                    final_state.get(
+                        "processing_time_seconds"
+                    ),
+
+                "execution_trace":
+                    final_state.get(
+                        "execution_trace",
+                        [],
+                    ),
             }
         )
 
@@ -536,23 +638,30 @@ def render_summarize():
 # Compare
 # ---------------------------------------------------------------------------
 def render_compare():
+
     st.title("Compare")
 
     vs = vector_store()
     docs = vs.list_documents()
 
     if len(docs) < 2:
+
         st.warning(
-            "Upload at least two documents to use the Comparator."
+            "Upload at least two documents "
+            "to use the Comparator."
         )
+
         return
 
     doc_options = {
-        f"{d['filename']} ({d['sha256'][:8]})": d["sha256"]
+        f"{d['filename']} ({d['sha256'][:8]})":
+        d["sha256"]
         for d in docs
     }
 
-    labels = list(doc_options.keys())
+    labels = list(
+        doc_options.keys()
+    )
 
     col1, col2 = st.columns(2)
 
@@ -565,45 +674,68 @@ def render_compare():
     doc_b_label = col2.selectbox(
         "Document B",
         labels,
-        index=min(1, len(labels) - 1),
+        index=min(
+            1,
+            len(labels) - 1,
+        ),
     )
 
     if st.button(
         "Generate Comparison",
         type="primary",
     ):
-        sha_a = doc_options[doc_a_label]
-        sha_b = doc_options[doc_b_label]
+
+        sha_a = doc_options[
+            doc_a_label
+        ]
+
+        sha_b = doc_options[
+            doc_b_label
+        ]
 
         if sha_a == sha_b:
+
             st.error(
                 "Please select two different documents."
             )
+
             return
 
         with st.spinner(
             "Comparator Agent working..."
         ):
+
             try:
+
                 final_state = run_workflow(
-                    user_query="Compare these two documents.",
+                    user_query=(
+                        "Compare these two documents."
+                    ),
+
                     model=settings.gemini_model,
+
                     temperature=settings.temperature,
+
                     top_k=settings.top_k,
+
                     selected_documents=[
                         sha_a,
                         sha_b,
                     ],
+
                     mode_hint="comparator",
                 )
 
             except Exception as exc:  # noqa: BLE001
+
                 st.error(
                     f"Comparison failed: {exc}"
                 )
+
                 return
 
         if final_state.get("errors"):
+
             for e in final_state["errors"]:
                 st.error(e)
 
@@ -617,12 +749,14 @@ def render_compare():
         )
 
         if result:
+
             st.subheader(
                 f"{result['document_a']}  vs  "
                 f"{result['document_b']}"
             )
 
             if result.get("table_rows"):
+
                 st.table(
                     result["table_rows"]
                 )
@@ -630,17 +764,21 @@ def render_compare():
             for section, items in result[
                 "sections"
             ].items():
+
                 if items:
+
                     st.markdown(
                         f"**{section}**"
                     )
 
                     for item in items:
+
                         st.markdown(
                             f"- {item}"
                         )
 
         else:
+
             st.markdown(
                 final_state.get(
                     "final_response",
@@ -650,72 +788,46 @@ def render_compare():
 
         _render_explainability(
             {
-                "selected_agent": final_state.get(
-                    "selected_agent"
-                ),
-                "routing_reason": final_state.get(
-                    "routing_reason"
-                ),
-                "sources": final_state.get(
-                    "sources",
-                    [],
-                ),
-                "llm_model": final_state.get(
-                    "llm_model"
-                ),
-                "processing_time_seconds": final_state.get(
-                    "processing_time_seconds"
-                ),
-                "execution_trace": final_state.get(
-                    "execution_trace",
-                    [],
-                ),
+                "selected_agent":
+                    final_state.get(
+                        "selected_agent"
+                    ),
+
+                "routing_reason":
+                    final_state.get(
+                        "routing_reason"
+                    ),
+
+                "sources":
+                    final_state.get(
+                        "sources",
+                        [],
+                    ),
+
+                "llm_model":
+                    final_state.get(
+                        "llm_model"
+                    ),
+
+                "processing_time_seconds":
+                    final_state.get(
+                        "processing_time_seconds"
+                    ),
+
+                "execution_trace":
+                    final_state.get(
+                        "execution_trace",
+                        [],
+                    ),
             }
         )
-
-
-# ---------------------------------------------------------------------------
-# Agent Activity
-# ---------------------------------------------------------------------------
-def render_activity():
-    st.title("Agent Activity")
-
-    st.caption(
-        "Recent orchestrator routing / execution history "
-        "(this session)."
-    )
-
-    if not st.session_state.agent_activity:
-        st.info(
-            "No activity yet. Ask a question in "
-            "'Ask Documents' to see routing decisions here."
-        )
-        return
-
-    for entry in st.session_state.agent_activity:
-        with st.container(border=True):
-            st.markdown(
-                f"**Query:** {entry['query']}"
-            )
-
-            st.markdown(
-                f"**Agent:** `{entry['agent']}`  |  "
-                f"**Time:** {entry['time']}s"
-            )
-
-            st.caption(
-                f"Reason: {entry['reason']}"
-            )
-
-            if entry.get("errors"):
-                for e in entry["errors"]:
-                    st.error(e)
 
 
 # ---------------------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------------------
 def render_settings():
+
     st.title("Settings")
 
     st.caption(
@@ -725,12 +837,14 @@ def render_settings():
     from models.gemini_client import api_key_configured
 
     if api_key_configured():
+
         st.success(
             "GEMINI_API_KEY is configured "
             "(loaded from environment / .env)."
         )
 
     else:
+
         st.error(
             "GEMINI_API_KEY is not set. "
             "Add it to a local `.env` file "
@@ -792,6 +906,7 @@ def render_settings():
     )
 
     if st.button("Save Settings"):
+
         st.success(
             "Settings updated for this session."
         )
@@ -805,7 +920,6 @@ PAGES = {
     "Ask Documents": render_ask,
     "Summarize": render_summarize,
     "Compare": render_compare,
-    "Agent Activity": render_activity,
     "Settings": render_settings,
 }
 
