@@ -184,6 +184,9 @@ def render_documents():
 # ---------------------------------------------------------------------------
 # Ask Documents
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Ask Documents
+# ---------------------------------------------------------------------------
 def render_ask():
     st.title("Ask Documents")
 
@@ -191,6 +194,15 @@ def render_ask():
         "Automatic agent routing via the LangGraph "
         "Orchestrator (LLM-based intent classification)."
     )
+
+    # Initialize chat history
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    # Clear Chat button
+    if st.button("🗑️ Clear Chat"):
+        st.session_state.chat_history = []
+        st.rerun()
 
     vs = vector_store()
     docs = vs.list_documents()
@@ -201,9 +213,6 @@ def render_ask():
             "Go to the Documents page first."
         )
         return
-
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
 
     # -----------------------------------------------------------------------
     # Document selection
@@ -230,7 +239,7 @@ def render_ask():
     ]
 
     # -----------------------------------------------------------------------
-    # Chat history
+    # Display previous chat
     # -----------------------------------------------------------------------
     for turn in st.session_state.chat_history:
 
@@ -255,6 +264,7 @@ def render_ask():
 
     if user_query:
 
+        # Add user message
         st.session_state.chat_history.append(
             {
                 "role": "user",
@@ -265,6 +275,7 @@ def render_ask():
         with st.chat_message("user"):
             st.markdown(user_query)
 
+        # Generate assistant response
         with st.chat_message("assistant"):
 
             with st.spinner(
@@ -272,6 +283,7 @@ def render_ask():
             ):
 
                 try:
+
                     final_state = run_workflow(
                         user_query=user_query,
                         model=settings.gemini_model,
@@ -295,12 +307,12 @@ def render_ask():
 
             if final_state:
 
-                st.markdown(
-                    final_state.get(
-                        "final_response",
-                        "",
-                    )
+                response = final_state.get(
+                    "final_response",
+                    "",
                 )
+
+                st.markdown(response)
 
                 meta = {
                     "selected_agent":
@@ -348,18 +360,13 @@ def render_ask():
                         ),
                 }
 
-                _render_explainability(
-                    meta
-                )
+                _render_explainability(meta)
 
+                # Save assistant response
                 st.session_state.chat_history.append(
                     {
                         "role": "assistant",
-                        "content":
-                            final_state.get(
-                                "final_response",
-                                "",
-                            ),
+                        "content": response,
                         "meta": meta,
                     }
                 )
