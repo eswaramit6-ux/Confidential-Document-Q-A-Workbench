@@ -440,7 +440,6 @@ def render_settings():
 # Router
 # ---------------------------------------------------------------------------
 PAGES = {
-    "Dashboard": render_dashboard,
     "Documents": render_documents,
     "Ask Documents": render_ask,
     "Summarize": render_summarize,
