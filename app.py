@@ -67,65 +67,6 @@ st.sidebar.markdown(
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
-def render_dashboard():
-    st.title("Dashboard")
-    st.caption(
-        "Documents, embeddings, and ChromaDB remain local. LLM requests are sent to the Google Gemini API."
-    )
-
-    vs = vector_store()
-    docs = vs.list_documents()
-    chunk_count = vs.count_chunks()
-
-    from models.gemini_client import api_key_configured
-    key_configured = api_key_configured()
-    chroma_ok, chroma_msg = chroma_health_check()
-    embed_ok, embed_msg = embedding_model_available(settings.embedding_model)
-
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Documents indexed", len(docs))
-    col2.metric("Total chunks", chunk_count)
-    col3.metric("ChromaDB", "Online" if chroma_ok else "Offline")
-    col4.metric("Gemini API Key", "Configured" if key_configured else "Missing")
-
-    st.subheader("System Health")
-    h1, h2 = st.columns(2)
-    with h1:
-        if key_configured:
-            st.success("GEMINI_API_KEY is configured.")
-        else:
-            st.error(
-                "GEMINI_API_KEY is not set. Create a `.env` file (see `.env.example`) with "
-                "`GEMINI_API_KEY=<your key>`, or export it as an environment variable, then restart the app."
-            )
-        st.caption(f"Configured model: `{settings.gemini_model}`")
-        if st.button("Test Gemini connection"):
-            with st.spinner("Contacting Gemini API..."):
-                status = gemini_health_check(model=settings.gemini_model)
-            if status["gemini_reachable"]:
-                st.success(f"Successfully reached Gemini model '{status['model']}'.")
-            else:
-                st.error(status["error"] or "Could not reach the Gemini API.")
-    with h2:
-        if chroma_ok:
-            st.success(chroma_msg)
-        else:
-            st.error(chroma_msg)
-        if embed_ok:
-            st.success(embed_msg)
-        else:
-            st.error(embed_msg)
-
-    st.subheader("Current Configuration")
-    st.json({
-        "LLM (Google Gemini)": settings.gemini_model,
-        "Embedding model (local)": settings.embedding_model,
-        "Chunk size": settings.chunk_size,
-        "Chunk overlap": settings.chunk_overlap,
-        "Top-K retrieval": settings.top_k,
-        "Temperature": settings.temperature,
-    })
-
 
 # ---------------------------------------------------------------------------
 # Documents
